@@ -79,6 +79,15 @@
             padding: 0;
             font-size: 1.2rem;
         }
+        .circle-btn.gray {
+            background: #adb5bd !important;
+            color: #343a40 !important;
+            border: none;
+        }
+        .circle-btn.gray:active, .circle-btn.gray:focus {
+            background: #6c757d !important;
+            color: #fff !important;
+        }
         .welcome-img {
             width: 300px;
             height: 300px;
@@ -102,6 +111,7 @@
             display: flex;
             align-items: center;
             gap: 0.7em;
+            margin-left: 50px;
         }
         .option-block.selected {
             background: #d1e7dd;
@@ -137,6 +147,45 @@
             margin-right: 0.5em;
             margin-bottom: 0.5em;
         }
+        .feedback-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+        }
+        .feedback-circle-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e9ecef;
+            color: #6c757d;
+            border: none;
+            font-size: 1.2rem;
+            margin-left: 0.5em;
+            transition: background 0.2s;
+        }
+        .feedback-circle-btn:hover {
+            background: #adb5bd;
+            color: #fff;
+        }
+        .feedback-list {
+            margin-top: 1em;
+        }
+        .feedback-item {
+            background: #f8f9fa;
+            border-radius: 1em;
+            padding: 0.75em 1em;
+            margin-bottom: 0.5em;
+            text-align: left;
+            font-size: 1em;
+        }
+        /* Implementation indent */
+        #implementationSection {
+            margin-left: 100px;
+            width: calc(100% - 100px);
+        }
     </style>
 </head>
 <body>
@@ -157,10 +206,10 @@
                             <textarea id="inputText" class="form-control" rows="4" placeholder="Share your thoughts.."></textarea>
                         </div>
                         <div class="col-auto d-flex flex-column gap-2">
-                            <button id="recordButton" class="btn btn-primary circle-btn mb-2" title="Record Voice">
+                            <button id="recordButton" class="btn circle-btn gray mb-2" title="Record Voice">
                                 <i class="bi bi-mic"></i>
                             </button>
-                            <button id="processButton" class="btn btn-success circle-btn" disabled title="Get Solutions">
+                            <button id="processButton" class="btn circle-btn gray" disabled title="Get Solutions">
                                 <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
                                 <span class="button-text"><i class="bi bi-arrow-right"></i></span>
                             </button>
@@ -204,9 +253,11 @@
                         <span class="fw-semibold">Selected solution:</span>
                         <span id="selectedSolutionOption"></span>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3 feedback-row">
                         <input type="text" id="userFeedback" class="form-control" placeholder="Share your feedback or next step...">
+                        <button id="submitFeedbackBtn" class="feedback-circle-btn" title="Submit Feedback"><i class="bi bi-arrow-right"></i></button>
                     </div>
+                    <div class="feedback-list" id="feedbackList"></div>
                     <div class="implementation-actions" id="implementationActions"></div>
                 </div>
             </div>
@@ -235,11 +286,16 @@
         const implementationSection = document.getElementById('implementationSection');
         const selectedSolutionOption = document.getElementById('selectedSolutionOption');
         const implementationActions = document.getElementById('implementationActions');
+        const userFeedback = document.getElementById('userFeedback');
+        const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+        const feedbackList = document.getElementById('feedbackList');
         let lastProblems = [];
         let lastCategories = [];
         let currentOptions = [];
         let selectedOptionIdx = null;
         let selectedCategoryValue = '';
+        let feedbacks = [];
+        let isRecording = false;
 
         // Map LLM categories to color classes
         function getCategoryClass(category) {
@@ -255,41 +311,55 @@
         // Enable/disable process button based on input
         inputText.addEventListener('input', () => {
             processButton.disabled = !inputText.value.trim();
+            if (inputText.value.trim()) {
+                recordButton.classList.remove('gray');
+                processButton.classList.remove('gray');
+                // keep gray but darker
+                recordButton.classList.add('gray');
+                processButton.classList.add('gray');
+            } else {
+                recordButton.classList.add('gray');
+                processButton.classList.add('gray');
+            }
         });
 
-        // Handle voice recording
+        // Handle voice recording with ElevenLabs API
         recordButton.addEventListener('click', async () => {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
+            if (isRecording) {
+                // Stop recording
                 mediaRecorder.stop();
+                isRecording = false;
                 recordButton.innerHTML = '<i class="bi bi-mic"></i>';
                 recordButton.classList.remove('btn-danger');
-                recordButton.classList.add('btn-primary');
+                recordButton.classList.add('gray');
             } else {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     mediaRecorder = new MediaRecorder(stream);
                     audioChunks = [];
+                    isRecording = true;
 
                     mediaRecorder.ondataavailable = (event) => {
                         audioChunks.push(event.data);
                     };
 
                     mediaRecorder.onstop = async () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         const formData = new FormData();
-                        formData.append('audio', audioBlob, 'recording.wav');
-
+                        formData.append('audio', audioBlob, 'recording.webm');
                         try {
                             setLoading(true);
-                            const response = await fetch('/process_audio', {
+                            // Use ElevenLabs endpoint
+                            const response = await fetch('/elevenlabs_stt', {
                                 method: 'POST',
                                 body: formData
                             });
                             const data = await response.json();
-                            
                             if (response.ok) {
                                 inputText.value = data.text;
-                                displayProblems(data.problems);
+                                processButton.disabled = false;
+                                recordButton.classList.add('gray');
+                                processButton.classList.add('gray');
                             } else {
                                 alert(data.error || 'Error processing audio');
                             }
@@ -302,7 +372,7 @@
 
                     mediaRecorder.start();
                     recordButton.innerHTML = '<i class="bi bi-stop-circle"></i>';
-                    recordButton.classList.remove('btn-primary');
+                    recordButton.classList.remove('gray');
                     recordButton.classList.add('btn-danger');
                 } catch (err) {
                     alert('Error accessing microphone');
@@ -381,7 +451,7 @@
                     body: JSON.stringify({ problem })
                 });
                 const data = await response.json();
-                currentOptions = data.options;
+                currentOptions = (data.options || []).slice(0, 5); // limit to 5
                 selectedOptionIdx = null;
                 renderOptions();
                 solutionSection.style.display = 'block';
@@ -444,6 +514,25 @@
             implementationActions.innerHTML = actions.map(action =>
                 `<button class="btn btn-outline-primary implementation-action-btn">${action}</button>`
             ).join('');
+        }
+
+        // Feedback logic
+        submitFeedbackBtn.addEventListener('click', submitFeedback);
+        userFeedback.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitFeedback();
+            }
+        });
+        function submitFeedback() {
+            const val = userFeedback.value.trim();
+            if (!val) return;
+            feedbacks.push(val);
+            userFeedback.value = '';
+            renderFeedbacks();
+        }
+        function renderFeedbacks() {
+            feedbackList.innerHTML = feedbacks.map(f => `<div class="feedback-item">${f}</div>`).join('');
         }
     </script>
 </body>

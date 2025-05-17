@@ -6,6 +6,7 @@ from mistralai.client import MistralClient
 from mistralai.models.chat_completion import ChatMessage
 from dotenv import load_dotenv
 import json
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -49,7 +50,7 @@ def generate_solution_options(problem):
     """Use Mistral AI to generate solution options for a specific problem."""
     messages = [
         ChatMessage(role="system", content="You are a helpful assistant that provides several distinct solution options for a problem. Return a JSON object with a 'options' array, each option is a short, actionable suggestion. Do not include any explanation."),
-        ChatMessage(role="user", content=f"Provide several distinct solution options for this problem. Only actionable suggestions: {problem}")
+        ChatMessage(role="user", content=f"Provide several distinct solution options for this problem. Only actionable suggestions related to local community: {problem}")
     ]
     response = mistral_client.chat(
         model="mistral-tiny",
@@ -67,7 +68,7 @@ def generate_implementation_actions(solution_option):
     """Use Mistral AI to generate implementation actions for a selected solution option."""
     messages = [
         ChatMessage(role="system", content="You are a helpful assistant that provides implementation actions for a solution. Return a JSON object with an 'actions' array, each action is a short, actionable button label (e.g., 'Schedule a call', 'Book a meeting', 'Send an email', 'Start now'). Do not include any explanation."),
-        ChatMessage(role="user", content=f"Provide implementation actions for this solution option: {solution_option}")
+        ChatMessage(role="user", content=f"Provide 5 best implementation actions related to local community for this solution option: {solution_option}")
     ]
     response = mistral_client.chat(
         model="mistral-tiny",
@@ -131,6 +132,55 @@ def process_audio():
             return jsonify({'error': f'Could not request results: {str(e)}'}), 500
         finally:
             os.remove(filepath)
+
+@app.route('/elevenlabs_stt', methods=['POST'])
+def elevenlabs_stt():
+    api_key = os.getenv('ELEVENLABS_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'No ElevenLabs API key set'}), 500
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided'}), 400
+    audio_file = request.files['audio']
+    if audio_file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    # Save temp file
+    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], 'temp_audio.webm')
+    audio_file.save(temp_path)
+    # Convert webm to wav (ElevenLabs expects wav/mpeg/mp3/mp4/m4a)
+    import subprocess
+    wav_path = temp_path.replace('.webm', '.wav')
+    try:
+        subprocess.run([
+            'ffmpeg', '-y', '-i', temp_path, '-ar', '16000', '-ac', '1', wav_path
+        ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except Exception as e:
+        os.remove(temp_path)
+        return jsonify({'error': f'Audio conversion failed: {e}'}), 500
+    # Call ElevenLabs API
+    url = 'https://api.elevenlabs.io/v1/speech-to-text'
+    headers = {
+        'xi-api-key': api_key
+    }
+    files = {
+        'file': open(wav_path, 'rb')
+    }
+    data = {
+        'model_id': 'scribe_v1'  # or another supported model
+    }
+    try:
+        response = requests.post(url, headers=headers, files=files, data=data)
+        if response.status_code == 200:
+            data = response.json()
+            text = data.get('text', '')
+            return jsonify({'text': text})
+        else:
+            return jsonify({'error': f'ElevenLabs error: {response.text}'}), 500
+    finally:
+        files['file'].close()
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
 
 if __name__ == '__main__':
     app.run(debug=True) 

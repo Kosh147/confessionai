@@ -1,0 +1,5 @@
+Flask==3.0.2
+python-dotenv==1.0.1
+SpeechRecognition==3.10.1
+Werkzeug==3.0.1
+mistralai==0.0.12 

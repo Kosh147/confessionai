@@ -21,6 +21,11 @@
             justify-content: space-between;
             gap: 0.5rem;
         }
+        .problem-main {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+        }
         .problem-category {
             display: inline-block;
             padding: 0.25em 0.75em;
@@ -54,6 +59,7 @@
             color: #007bff;
             font-weight: 500;
             font-size: 1em;
+            margin-left: 0.5em;
         }
         .solve-btn:hover .solve-logo {
             box-shadow: 0 0 0 2px #007bff33;
@@ -85,7 +91,7 @@
         #solutionSection {
             scroll-margin-top: 120px;
         }
-        .step-block {
+        .option-block {
             background: #f3f6fa;
             border-radius: 1em;
             padding: 1em;
@@ -97,12 +103,12 @@
             align-items: center;
             gap: 0.7em;
         }
-        .step-block.done {
+        .option-block.selected {
             background: #d1e7dd;
-            text-decoration: line-through;
-            color: #6c757d;
+            color: #198754;
+            border-color: #198754;
         }
-        .step-check {
+        .option-check {
             width: 1.5em;
             height: 1.5em;
             border-radius: 50%;
@@ -113,9 +119,23 @@
             background: #fff;
             font-size: 1.2em;
         }
-        .step-block.done .step-check {
+        .option-block.selected .option-check {
             background: #198754;
             color: #fff;
+        }
+        .implementation-logo {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 0.5em;
+        }
+        .implementation-actions {
+            margin-top: 1.5em;
+        }
+        .implementation-action-btn {
+            margin-right: 0.5em;
+            margin-bottom: 0.5em;
         }
     </style>
 </head>
@@ -163,13 +183,31 @@
             </div>
             <!-- Solutions Block below problems -->
             <div id="solutionSection" class="card shadow-lg mb-4 w-100" style="display:none;">
-                <div class="card-header">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <span id="selectedCategory" class="problem-category"></span>
                     <h2 class="h5 mb-0" id="selectedProblemTitle"></h2>
                 </div>
-                <div class="card-body">
+                <div class="card-body" id="solutionBody">
                     <div id="solutionContent">
                         <p class="text-muted">Click on the logo or "Solve" to see a solution</p>
                     </div>
+                </div>
+            </div>
+            <!-- Implementation Block below solution options -->
+            <div id="implementationSection" class="card shadow-lg mb-4 w-100" style="display:none;">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <img src="/static/welcome_page_character.jpg" class="implementation-logo" width="30" height="30" alt="Logo">
+                    <span class="fw-bold">Let's get your problem sorted.</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="fw-semibold">Selected solution:</span>
+                        <span id="selectedSolutionOption"></span>
+                    </div>
+                    <div class="mb-3">
+                        <input type="text" id="userFeedback" class="form-control" placeholder="Share your feedback or next step...">
+                    </div>
+                    <div class="implementation-actions" id="implementationActions"></div>
                 </div>
             </div>
         </div>
@@ -187,15 +225,21 @@
         const results = document.getElementById('results');
         const problemsList = document.getElementById('problemsList');
         const solutionContent = document.getElementById('solutionContent');
+        const solutionBody = document.getElementById('solutionBody');
         const loadingSpinner = document.querySelector('.loading-spinner');
         const buttonText = document.querySelector('.button-text');
         const welcomeScreen = document.getElementById('welcomeScreen');
         const solutionSection = document.getElementById('solutionSection');
         const selectedProblemTitle = document.getElementById('selectedProblemTitle');
+        const selectedCategory = document.getElementById('selectedCategory');
+        const implementationSection = document.getElementById('implementationSection');
+        const selectedSolutionOption = document.getElementById('selectedSolutionOption');
+        const implementationActions = document.getElementById('implementationActions');
         let lastProblems = [];
         let lastCategories = [];
-        let currentSteps = [];
-        let stepDone = [];
+        let currentOptions = [];
+        let selectedOptionIdx = null;
+        let selectedCategoryValue = '';
 
         // Map LLM categories to color classes
         function getCategoryClass(category) {
@@ -305,24 +349,28 @@
             problemsList.innerHTML = problems.map((item, idx) => {
                 const catClass = getCategoryClass(item.category);
                 return `<li class="list-group-item problem-card">
-                    <span>
+                    <span class="problem-main">
                         <span class="problem-category ${catClass}">${item.category}</span>
                         <span>${item.problem}</span>
+                        <button class="solve-btn" onclick="solveProblem(${idx})">
+                            <img src='/static/welcome_page_character.jpg' class='solve-logo' width='30' height='30' alt='Solve'>
+                            Solve
+                        </button>
                     </span>
-                    <button class="solve-btn" onclick="solveProblem(${idx})">
-                        <img src='/static/welcome_page_character.jpg' class='solve-logo' width='30' height='30' alt='Solve'>
-                        Solve
-                    </button>
                 </li>`;
             }).join('');
             solutionContent.innerHTML = '<p class="text-muted">Click on the logo or "Solve" to see a solution</p>';
             solutionSection.style.display = 'none';
+            implementationSection.style.display = 'none';
             results.style.display = 'block';
         }
 
         window.solveProblem = async function(idx) {
             const problem = lastProblems[idx];
             selectedProblemTitle.textContent = problem;
+            selectedCategoryValue = lastCategories[idx];
+            selectedCategory.textContent = selectedCategoryValue;
+            selectedCategory.className = 'problem-category ' + getCategoryClass(selectedCategoryValue);
             try {
                 setLoading(true);
                 const response = await fetch('/get_solution', {
@@ -333,35 +381,69 @@
                     body: JSON.stringify({ problem })
                 });
                 const data = await response.json();
-                currentSteps = data.steps;
-                stepDone = Array(currentSteps.length).fill(false);
-                renderSteps();
+                currentOptions = data.options;
+                selectedOptionIdx = null;
+                renderOptions();
                 solutionSection.style.display = 'block';
+                implementationSection.style.display = 'none';
                 // Scroll to solution
                 setTimeout(() => {
                     solutionSection.scrollIntoView({ behavior: 'smooth' });
                 }, 100);
             } catch (error) {
-                solutionContent.innerHTML = '<p class="text-danger">Error loading solution</p>';
+                solutionContent.innerHTML = '<p class="text-danger">Error loading solution options</p>';
             } finally {
                 setLoading(false);
             }
         }
 
-        function renderSteps() {
-            let html = '<h3 class="h5 mb-3">Steps:</h3>';
-            currentSteps.forEach((step, i) => {
-                html += `<div class="step-block${stepDone[i] ? ' done' : ''}" onclick="toggleStep(${i})">
-                    <span class="step-check">${stepDone[i] ? '<i class=\'bi bi-check-lg\'></i>' : ''}</span>
-                    <span>${step}</span>
+        function renderOptions() {
+            let html = `<div class="d-flex align-items-center mb-3">
+                <img src="/static/welcome_page_character.jpg" class="implementation-logo" width="30" height="30" alt="Logo">
+                <span class="fw-bold ms-2">Those are my suggestions to solve your problem, choose one to start with.</span>
+            </div>`;
+            currentOptions.forEach((option, i) => {
+                html += `<div class="option-block${selectedOptionIdx === i ? ' selected' : ''}" onclick="selectOption(${i})">
+                    <span class="option-check">${selectedOptionIdx === i ? '<i class=\'bi bi-check-lg\'></i>' : ''}</span>
+                    <span>${option}</span>
                 </div>`;
             });
             solutionContent.innerHTML = html;
         }
 
-        window.toggleStep = function(i) {
-            stepDone[i] = !stepDone[i];
-            renderSteps();
+        window.selectOption = async function(i) {
+            selectedOptionIdx = i;
+            renderOptions();
+            // Move to implementation stage
+            const selectedOption = currentOptions[i];
+            selectedSolutionOption.textContent = selectedOption;
+            implementationSection.style.display = 'block';
+            // Get implementation actions from backend
+            setLoading(true);
+            try {
+                const response = await fetch('/get_implementation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ solution_option: selectedOption })
+                });
+                const data = await response.json();
+                renderImplementationActions(data.actions);
+                setTimeout(() => {
+                    implementationSection.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            } catch (error) {
+                implementationActions.innerHTML = '<p class="text-danger">Error loading implementation actions</p>';
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function renderImplementationActions(actions) {
+            implementationActions.innerHTML = actions.map(action =>
+                `<button class="btn btn-outline-primary implementation-action-btn">${action}</button>`
+            ).join('');
         }
     </script>
 </body>

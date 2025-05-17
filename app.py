@@ -45,11 +45,11 @@ def identify_problems(text):
     except Exception:
         return [{"problem": "Unable to identify specific problems", "category": "Other"}]
 
-def generate_solution(problem):
-    """Use Mistral AI to generate a step-by-step solution for a specific problem."""
+def generate_solution_options(problem):
+    """Use Mistral AI to generate solution options for a specific problem."""
     messages = [
-        ChatMessage(role="system", content="You are a helpful assistant that provides detailed, step-by-step solutions to problems. Format your response as a JSON object with 'steps' array."),
-        ChatMessage(role="user", content=f"Provide short, step-by-step action plan as a solution for this problem. Only specific actions. If no solution available answer that you are unable to solve it: {problem}")
+        ChatMessage(role="system", content="You are a helpful assistant that provides several distinct solution options for a problem. Return a JSON object with a 'options' array, each option is a short, actionable suggestion. Do not include any explanation."),
+        ChatMessage(role="user", content=f"Provide several distinct solution options for this problem. Only actionable suggestions: {problem}")
     ]
     response = mistral_client.chat(
         model="mistral-tiny",
@@ -60,7 +60,25 @@ def generate_solution(problem):
         return solution
     except Exception:
         return {
-            "steps": ["Unable to generate detailed solution"]
+            "options": ["Unable to generate solution options"]
+        }
+
+def generate_implementation_actions(solution_option):
+    """Use Mistral AI to generate implementation actions for a selected solution option."""
+    messages = [
+        ChatMessage(role="system", content="You are a helpful assistant that provides implementation actions for a solution. Return a JSON object with an 'actions' array, each action is a short, actionable button label (e.g., 'Schedule a call', 'Book a meeting', 'Send an email', 'Start now'). Do not include any explanation."),
+        ChatMessage(role="user", content=f"Provide implementation actions for this solution option: {solution_option}")
+    ]
+    response = mistral_client.chat(
+        model="mistral-tiny",
+        messages=messages,
+    )
+    try:
+        actions = json.loads(response.choices[0].message.content)
+        return actions
+    except Exception:
+        return {
+            "actions": ["Start now"]
         }
 
 @app.route('/')
@@ -78,8 +96,14 @@ def process_text_route():
 @app.route('/get_solution', methods=['POST'])
 def get_solution():
     problem = request.json.get('problem', '')
-    solution = generate_solution(problem)
+    solution = generate_solution_options(problem)
     return jsonify(solution)
+
+@app.route('/get_implementation', methods=['POST'])
+def get_implementation():
+    solution_option = request.json.get('solution_option', '')
+    actions = generate_implementation_actions(solution_option)
+    return jsonify(actions)
 
 @app.route('/process_audio', methods=['POST'])
 def process_audio():

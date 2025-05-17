@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 from mistralai.client import MistralClient
 from mistralai.models.chat_completion import ChatMessage
 from dotenv import load_dotenv
+import json
 
 # Load environment variables
 load_dotenv()
@@ -20,24 +21,29 @@ mistral_client = MistralClient(api_key=os.getenv("MISTRAL_API_KEY"))
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 def identify_problems(text):
-    """Use Mistral AI to identify problems from the input text."""
+    """Use Mistral AI to identify problems and categories from the input text."""
     messages = [
-        ChatMessage(role="system", content="You are a helpful assistant that identifies specific problems from user inpssut. Return only a JSON array of problem strings, nothing else."),
-        ChatMessage(role="user", content=f"Identify specific problems from this text. Star them as a statement that looks like 'I have...': {text}")
+        ChatMessage(
+            role="system",
+            content=(
+                "You are a helpful assistant that identifies specific problems from user input. "
+                "Return a JSON array of objects, each with 'problem' (a statement like 'I have...') "
+                "and 'category' (one word, e.g. 'Health', 'Money', 'Activity', 'Social', 'Work', 'Other'). "
+                "Example: [{\"problem\": \"I have little free time\", \"category\": \"Time\"}]. "
+                "Do not include any explanation."
+            )
+        ),
+        ChatMessage(role="user", content=f"Identify specific problems and their category from this text: {text}")
     ]
-    
     response = mistral_client.chat(
         model="mistral-tiny",
         messages=messages,
     )
-    
     try:
-        # Extract the JSON array from the response
-        problems = eval(response.choices[0].message.content)
+        problems = json.loads(response.choices[0].message.content)
         return problems
-    except:
-        # Fallback to basic problem identification if JSON parsing fails
-        return ["Unable to identify specific problems"]
+    except Exception:
+        return [{"problem": "Unable to identify specific problems", "category": "Other"}]
 
 def generate_solution(problem):
     """Use Mistral AI to generate a step-by-step solution for a specific problem."""
@@ -45,20 +51,16 @@ def generate_solution(problem):
         ChatMessage(role="system", content="You are a helpful assistant that provides detailed, step-by-step solutions to problems. Format your response as a JSON object with 'steps' array."),
         ChatMessage(role="user", content=f"Provide short, step-by-step action plan as a solution for this problem. Only specific actions. If no solution available answer that you are unable to solve it: {problem}")
     ]
-    
     response = mistral_client.chat(
         model="mistral-tiny",
         messages=messages,
     )
-    
     try:
-        # Extract the JSON object from the response
-        solution = eval(response.choices[0].message.content)
+        solution = json.loads(response.choices[0].message.content)
         return solution
-    except:
-        # Fallback to basic solution if JSON parsing fails
+    except Exception:
         return {
-            "steps": ["Unable to generate detailed solution"],
+            "steps": ["Unable to generate detailed solution"]
         }
 
 @app.route('/')
@@ -83,16 +85,12 @@ def get_solution():
 def process_audio():
     if 'audio' not in request.files:
         return jsonify({'error': 'No audio file provided'}), 400
-    
     audio_file = request.files['audio']
     if audio_file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-    
     filename = secure_filename(audio_file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     audio_file.save(filepath)
-    
-    # Convert speech to text
     recognizer = sr.Recognizer()
     with sr.AudioFile(filepath) as source:
         audio_data = recognizer.record(source)
@@ -108,7 +106,6 @@ def process_audio():
         except sr.RequestError as e:
             return jsonify({'error': f'Could not request results: {str(e)}'}), 500
         finally:
-            # Clean up the audio file
             os.remove(filepath)
 
 if __name__ == '__main__':

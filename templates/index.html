@@ -9,73 +9,166 @@
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        .gradient-bg {
-            background: linear-gradient(to bottom, #e3f2fd, #ffffff);
+        body {
+            background: #fff !important;
         }
         .problem-card {
             background-color: #f8f9fa;
-            cursor: pointer;
+            cursor: default;
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
         }
-        .problem-card:hover {
-            background-color: #e9ecef;
-            transform: translateY(-2px);
+        .problem-category {
+            display: inline-block;
+            padding: 0.25em 0.75em;
+            border-radius: 999px;
+            font-size: 0.85em;
+            font-weight: 500;
+            color: #fff;
+            margin-right: 0.75em;
         }
-        .solution-card {
-            background-color: #e3f2fd;
+        .category-activity { background: #ff9800; }
+        .category-health { background: #4caf50; }
+        .category-money { background: #2196f3; }
+        .category-social { background: #e91e63; }
+        .category-work { background: #9c27b0; }
+        .category-other { background: #607d8b; }
+        .solve-logo {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 0.3em;
+            cursor: pointer;
+        }
+        .solve-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.2em;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: #007bff;
+            font-weight: 500;
+            font-size: 1em;
+        }
+        .solve-btn:hover .solve-logo {
+            box-shadow: 0 0 0 2px #007bff33;
         }
         .loading-spinner {
             display: none;
             width: 1.5rem;
             height: 1.5rem;
         }
+        .circle-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 1.2rem;
+        }
+        .welcome-img {
+            width: 300px;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 50%;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #solutionSection {
+            scroll-margin-top: 120px;
+        }
+        .step-block {
+            background: #f3f6fa;
+            border-radius: 1em;
+            padding: 1em;
+            margin-bottom: 1em;
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 0.7em;
+        }
+        .step-block.done {
+            background: #d1e7dd;
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+        .step-check {
+            width: 1.5em;
+            height: 1.5em;
+            border-radius: 50%;
+            border: 2px solid #198754;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            font-size: 1.2em;
+        }
+        .step-block.done .step-check {
+            background: #198754;
+            color: #fff;
+        }
     </style>
 </head>
-<body class="gradient-bg min-vh-100">
+<body>
     <div class="container py-5">
-        <h1 class="text-center mb-5">Problem Solver</h1>
-
-        <div class="card shadow-lg mb-5">
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-12">
-                        <textarea id="inputText" class="form-control" rows="4" 
-                                placeholder="Describe your situation..."></textarea>
-                    </div>
-                    <div class="col-12 d-flex gap-2">
-                        <button id="recordButton" class="btn btn-primary flex-grow-1">
-                            <i class="bi bi-mic"></i> Record Voice
-                        </button>
-                        <button id="processButton" class="btn btn-success flex-grow-1" disabled>
-                            <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
-                            <span class="button-text">Get Solutions</span>
-                        </button>
+        <!-- Welcome Screen with Input -->
+        <div id="welcomeScreen" class="text-center mb-5">
+            <img src="/static/welcome_page_character.jpg" alt="Welcome" class="welcome-img mb-4" width="300" height="300">
+            <h2>Welcome :) This is your safe space.</h2>
+            <p class="lead mt-3 mb-4">
+                Think of me as a friend—someone you can talk to<br>
+                about what you need help with, or what you're<br>
+                hoping to achieve in life right now.
+            </p>
+            <div class="card shadow-lg mx-auto" style="max-width: 600px;">
+                <div class="card-body">
+                    <div class="row g-3 align-items-center">
+                        <div class="col">
+                            <textarea id="inputText" class="form-control" rows="4" placeholder="Share your thoughts.."></textarea>
+                        </div>
+                        <div class="col-auto d-flex flex-column gap-2">
+                            <button id="recordButton" class="btn btn-primary circle-btn mb-2" title="Record Voice">
+                                <i class="bi bi-mic"></i>
+                            </button>
+                            <button id="processButton" class="btn btn-success circle-btn" disabled title="Get Solutions">
+                                <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
+                                <span class="button-text"><i class="bi bi-arrow-right"></i></span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="results" class="row g-4" style="display: none;">
-            <div class="col-md-6">
-                <div class="card shadow-lg h-100">
-                    <div class="card-header">
-                        <h2 class="h4 mb-0">Identified Problems</h2>
-                    </div>
-                    <div class="card-body">
-                        <ul id="problemsList" class="list-group list-group-flush">
-                        </ul>
-                    </div>
+        <!-- Problems Block (full width) -->
+        <div id="results" style="display: none;">
+            <div class="card shadow-lg mb-4 w-100">
+                <div class="card-header">
+                    <h2 class="h4 mb-0">Identified Problems</h2>
+                </div>
+                <div class="card-body">
+                    <ul id="problemsList" class="list-group list-group-flush">
+                    </ul>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="card shadow-lg h-100">
-                    <div class="card-header">
-                        <h2 class="h4 mb-0">Solution</h2>
-                    </div>
-                    <div class="card-body">
-                        <div id="solutionContent">
-                            <p class="text-muted">Click on a problem to see its solution</p>
-                        </div>
+            <!-- Solutions Block below problems -->
+            <div id="solutionSection" class="card shadow-lg mb-4 w-100" style="display:none;">
+                <div class="card-header">
+                    <h2 class="h5 mb-0" id="selectedProblemTitle"></h2>
+                </div>
+                <div class="card-body">
+                    <div id="solutionContent">
+                        <p class="text-muted">Click on the logo or "Solve" to see a solution</p>
                     </div>
                 </div>
             </div>
@@ -96,6 +189,24 @@
         const solutionContent = document.getElementById('solutionContent');
         const loadingSpinner = document.querySelector('.loading-spinner');
         const buttonText = document.querySelector('.button-text');
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const solutionSection = document.getElementById('solutionSection');
+        const selectedProblemTitle = document.getElementById('selectedProblemTitle');
+        let lastProblems = [];
+        let lastCategories = [];
+        let currentSteps = [];
+        let stepDone = [];
+
+        // Map LLM categories to color classes
+        function getCategoryClass(category) {
+            const cat = (category || '').toLowerCase();
+            if (cat === 'activity') return 'category-activity';
+            if (cat === 'health') return 'category-health';
+            if (cat === 'money') return 'category-money';
+            if (cat === 'social') return 'category-social';
+            if (cat === 'work') return 'category-work';
+            return 'category-other';
+        }
 
         // Enable/disable process button based on input
         inputText.addEventListener('input', () => {
@@ -106,7 +217,7 @@
         recordButton.addEventListener('click', async () => {
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
-                recordButton.innerHTML = '<i class="bi bi-mic"></i> Record Voice';
+                recordButton.innerHTML = '<i class="bi bi-mic"></i>';
                 recordButton.classList.remove('btn-danger');
                 recordButton.classList.add('btn-primary');
             } else {
@@ -146,7 +257,7 @@
                     };
 
                     mediaRecorder.start();
-                    recordButton.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Recording';
+                    recordButton.innerHTML = '<i class="bi bi-stop-circle"></i>';
                     recordButton.classList.remove('btn-primary');
                     recordButton.classList.add('btn-danger');
                 } catch (err) {
@@ -171,6 +282,10 @@
                 });
                 const data = await response.json();
                 displayProblems(data.problems);
+                // Scroll to problems
+                setTimeout(() => {
+                    results.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
             } catch (error) {
                 alert('Error processing text');
             } finally {
@@ -180,22 +295,34 @@
 
         function setLoading(isLoading) {
             loadingSpinner.style.display = isLoading ? 'inline-block' : 'none';
-            buttonText.textContent = isLoading ? 'Processing...' : 'Get Solutions';
+            buttonText.innerHTML = isLoading ? '<span class="visually-hidden">Processing...</span>' : '<i class="bi bi-arrow-right"></i>';
             processButton.disabled = isLoading;
         }
 
         function displayProblems(problems) {
-            problemsList.innerHTML = problems.map(problem => 
-                `<li class="list-group-item problem-card" onclick="getSolution('${problem.replace(/'/g, "\\'")}')">
-                    ${problem}
-                </li>`
-            ).join('');
-            
-            solutionContent.innerHTML = '<p class="text-muted">Click on a problem to see its solution</p>';
-            results.style.display = 'flex';
+            lastProblems = problems.map(p => p.problem);
+            lastCategories = problems.map(p => p.category);
+            problemsList.innerHTML = problems.map((item, idx) => {
+                const catClass = getCategoryClass(item.category);
+                return `<li class="list-group-item problem-card">
+                    <span>
+                        <span class="problem-category ${catClass}">${item.category}</span>
+                        <span>${item.problem}</span>
+                    </span>
+                    <button class="solve-btn" onclick="solveProblem(${idx})">
+                        <img src='/static/welcome_page_character.jpg' class='solve-logo' width='30' height='30' alt='Solve'>
+                        Solve
+                    </button>
+                </li>`;
+            }).join('');
+            solutionContent.innerHTML = '<p class="text-muted">Click on the logo or "Solve" to see a solution</p>';
+            solutionSection.style.display = 'none';
+            results.style.display = 'block';
         }
 
-        async function getSolution(problem) {
+        window.solveProblem = async function(idx) {
+            const problem = lastProblems[idx];
+            selectedProblemTitle.textContent = problem;
             try {
                 setLoading(true);
                 const response = await fetch('/get_solution', {
@@ -206,27 +333,35 @@
                     body: JSON.stringify({ problem })
                 });
                 const data = await response.json();
-                
-                let solutionHtml = '';
-                data.steps.forEach(step => {
-                    solutionHtml += `<li class="mb-2">${step}</li>`;
-                });
-                solutionHtml += '</ol>';
-                
-                if (data.resources && data.resources.length > 0) {
-                    solutionHtml += '<h3 class="h5 mb-3">Resources:</h3><ul>';
-                    data.resources.forEach(resource => {
-                        solutionHtml += `<li class="mb-2">${resource}</li>`;
-                    });
-                    solutionHtml += '</ul>';
-                }
-                
-                solutionContent.innerHTML = solutionHtml;
+                currentSteps = data.steps;
+                stepDone = Array(currentSteps.length).fill(false);
+                renderSteps();
+                solutionSection.style.display = 'block';
+                // Scroll to solution
+                setTimeout(() => {
+                    solutionSection.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
             } catch (error) {
                 solutionContent.innerHTML = '<p class="text-danger">Error loading solution</p>';
             } finally {
                 setLoading(false);
             }
+        }
+
+        function renderSteps() {
+            let html = '<h3 class="h5 mb-3">Steps:</h3>';
+            currentSteps.forEach((step, i) => {
+                html += `<div class="step-block${stepDone[i] ? ' done' : ''}" onclick="toggleStep(${i})">
+                    <span class="step-check">${stepDone[i] ? '<i class=\'bi bi-check-lg\'></i>' : ''}</span>
+                    <span>${step}</span>
+                </div>`;
+            });
+            solutionContent.innerHTML = html;
+        }
+
+        window.toggleStep = function(i) {
+            stepDone[i] = !stepDone[i];
+            renderSteps();
         }
     </script>
 </body>

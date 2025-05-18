@@ -1,0 +1,92 @@
+[
+    {
+      "Problem": "I want to get involved in a team - padel, tennis or something similiar"
+    },
+    {
+      "Problem": "I want to have a test for adhd/autism",
+      "Solution": "Nearest local place to get an Adhd/ Autism test @ £2750"
+    },
+    {
+      "Problem": "I want to have a test for adhd/autism",
+      "Solution": "Reach out to charity"
+    },
+    {
+      "Problem": "I want to have a test for adhd/autism",
+      "Solution": "Talk to Local",
+      "Implementation": "Jenny can talk",
+      "action": "Scheduled: Meet up with Jenny"
+    },
+    {
+      "Problem": "I want to have a test for adhd/autism",
+      "Solution": "Save money"
+    },
+    {
+      "Problem": "I want to have a test for adhd/autism",
+      "Solution": "Send issue to local council",
+      "Implementation": "Send to Rob",
+      "action": "Sent issue to Rob"
+    },
+    {
+      "Problem": "I would like to give an hour a week to local community",
+      "Solution": "Join the weekly village fix and repair group\n\nEvery Sunday | Meet at Village Hall @ 10am",
+      "Implementation": "Join",
+      "action": "Joined group"
+    },
+    {
+      "Problem": "I would like to give an hour a week to local community",
+      "Solution": "There’s a local that needs some help\n\nEileen - “Hello, I’ve got some children’s books and\nold teaching materials I’d love to donate to the\nlocal charity shop, but I need some help taking\nthem there.”",
+      "Implementation": "Help",
+      "action": "Helped Eileen"
+    },
+    {
+      "Problem": "I want to improve my public speaking skills",
+      "Solution": "Join a local Toastmasters group",
+      "Implementation": "Joined",
+      "action": "Attended first session"
+    },
+    {
+      "Problem": "I want to learn data analysis using Python",
+      "Solution": "Start an online course on Coursera or edX"
+    },
+    {
+      "Problem": "I want to write and publish a short story",
+      "Solution": "Join a writers' workshop or writing challenge"
+    },
+    {
+      "Problem": "I want to write and publish a short story",
+      "Solution": "There's a local who "
+    },
+    {
+      "Problem": "I want to reduce screen time and be more mindful",
+      "Solution": "Use an app like Forest or Screen Time to limit phone use",
+      "Implementation": "Install and configure app",
+      "action": "Installed"
+    },
+    {
+      "Problem": "I want to sleep better at night",
+      "Solution": "Establish a consistent bedtime routine with no screens after 9 PM"
+    },
+    {
+      "Problem": "I want to gain muscle and improve strength",
+      "Solution": "Follow a beginner strength training plan from a certified trainer",
+      "Implementation": "Get a beginner-friendly plan",
+      "action": "Downloaded plan and started week 1"
+    },
+    {
+      "Problem": "I want to start a community garden project",
+      "Solution": "Talk to the local council and gather interested neighbors",
+      "Implementation": "Contact Dan"
+    },
+    {
+      "Problem": "I want to get to know my neighbours",
+      "Solution": "Offer to host a dinner party"
+    },
+    {
+      "Problem": "I want to get to know my neighbours",
+      "Solution": "Organise a street party"
+    },
+    {
+      "Problem": "I want to get to know my neighbours",
+      "Solution": "Knock on doors and start a conversation"
+    }
+  ]

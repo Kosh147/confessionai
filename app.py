@@ -22,6 +22,10 @@ mistral_client = MistralClient(api_key=os.getenv("MISTRAL_API_KEY"))
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Load personal solutions database
+with open('test_db.json', 'r') as f:
+    PERSONAL_SOLUTIONS = json.load(f)
+
 def identify_problems(text):
     """Use Mistral AI to identify problems and categories from the input text."""
     messages = [
@@ -48,10 +52,21 @@ def identify_problems(text):
         return [{"problem": "Unable to identify specific problems", "category": "Other"}]
 
 def generate_solution_options(problem):
-    """Use Mistral AI to generate solution options for a specific problem."""
+    """Use Mistral AI to generate solution options for a specific problem, including personal solutions if they match."""
+    system_prompt = (
+        "You are a helpful assistant that provides several distinct solution options for a problem. "
+        "You also have access to a user's personal solutions database as a JSON array. "
+        "If any solution in the personal solutions database matches the user's problem, include it as a solution option (preferably first). "
+        "Otherwise, generate new options. Make them short and personal."
+        "Return a JSON object with a 'options' array, each option is a short, actionable suggestion. Do not include any explanation."
+    )
+    user_prompt = (
+        f"Personal solutions database: {json.dumps(PERSONAL_SOLUTIONS)}\n"
+        f"User problem: {problem}"
+    )
     messages = [
-        ChatMessage(role="system", content="You are a helpful assistant that provides several distinct solution options for a problem. Return a JSON object with a 'options' array, each option is a short, actionable suggestion. Do not include any explanation."),
-        ChatMessage(role="user", content=f"Provide several distinct solution options for this problem. Only actionable suggestions related to local community: {problem}")
+        ChatMessage(role="system", content=system_prompt),
+        ChatMessage(role="user", content=user_prompt)
     ]
     response = mistral_client.chat(
         model="mistral-tiny",
@@ -107,7 +122,7 @@ def find_resource(action, user_input):
     except Exception:
         return {"label": "Local community website", "url": "https://www.gov.uk/find-local-council"}
 
-def brave_search(query):
+def brave_search(query, solution=None):
     api_key = os.getenv('BRAVE_API_KEY')
     if not api_key:
         return None
@@ -116,8 +131,10 @@ def brave_search(query):
         'Accept': 'application/json',
         'X-Subscription-Token': api_key
     }
+    if solution:
+        query = f"{query} {solution}".strip()
     params = {'q': query, 'count': 1}
-    print(query)
+    #print(query)
     try:
         resp = requests.get(url, headers=headers, params=params)
         if resp.status_code == 200:
@@ -134,6 +151,64 @@ def brave_search(query):
         return None
     finally:
         time.sleep(2)
+
+def find_personal_chain(problem, solution=None, action=None):
+    """Use LLM to find the best-matching Implementation and Action chain from personal solutions DB."""
+    system_prompt = (
+        "You are a helpful assistant. You have access to a user's personal solutions database as a JSON array. "
+        "Each entry has columns: Problem, Solution, Implementation, action. "
+        "Given a user's current problem, solution, and action, find the most relevant Implementation and Action chain from the database. "
+        "Return a JSON array of objects, each with 'Implementation' and 'Action' fields, representing the chain of events for the user to follow. "
+        "If no good match, return an empty array. Do not include any explanation."
+    )
+    user_prompt = (
+        f"Personal solutions database: {json.dumps(PERSONAL_SOLUTIONS)}\n"
+        f"User problem: {problem}\n"
+        f"User solution: {solution or ''}\n"
+        f"User action: {action or ''}"
+    )
+    messages = [
+        ChatMessage(role="system", content=system_prompt),
+        ChatMessage(role="user", content=user_prompt)
+    ]
+    response = mistral_client.chat(
+        model="mistral-tiny",
+        messages=messages,
+    )
+    try:
+        chain = json.loads(response.choices[0].message.content)
+        print(f"LLM chain answer{chain}")
+        return chain
+    except Exception:
+        return []
+
+def align_problem_solution(user_problem, user_solution):
+    """Use LLM to find the single best-matching Problem/Solution in the personal database."""
+    system_prompt = (
+        "You are a helpful assistant. You have access to a user's personal solutions database as a JSON array. "
+        "Each entry has columns: Problem, Solution, Implementation, action. "
+        "Given a user's current problem and solution, select only the single best-matching Problem/Solution pair in the database. "
+        "Return a JSON object with 'Problem' and 'Solution' fields from the database. If no good match, return an empty object. Do not include any explanation."
+    )
+    user_prompt = (
+        f"Personal solutions database: {json.dumps(PERSONAL_SOLUTIONS)}\n"
+        f"User problem: {user_problem}\n"
+        f"User solution: {user_solution or ''}"
+    )
+    messages = [
+        ChatMessage(role="system", content=system_prompt),
+        ChatMessage(role="user", content=user_prompt)
+    ]
+    response = mistral_client.chat(
+        model="mistral-tiny",
+        messages=messages,
+    )
+    print(f"LLM ANSWER: {response}")
+    try:
+        match = json.loads(response.choices[0].message.content)
+        return match if match.get('Problem') and match.get('Solution') else None
+    except Exception:
+        return None
 
 @app.route('/')
 def index():
@@ -240,12 +315,40 @@ def get_resource():
     data = request.json
     action = data.get('action', '')
     user_input = data.get('user_input', '')
+    solution = data.get('solution', '')
     query = f"{action} {user_input}".strip()
-    result = brave_search(query)
+    result = brave_search(query, solution)
     if result:
         return jsonify(result)
     else:
         return jsonify({'title': 'No relevant resource found', 'url': '', 'snippet': ''})
+
+@app.route('/get_personal_chain', methods=['POST'])
+def get_personal_chain():
+    data = request.json
+    user_problem = data.get('problem', '')
+    user_solution = data.get('solution', '')
+    # Use LLM to align to best-matching Problem/Solution
+    match = align_problem_solution(user_problem, user_solution)
+    chain = []
+    if match:
+        # If LLM returned Implementation and/or action, use them directly
+        impl = match.get('Implementation')
+        act = match.get('action')
+        if impl:
+            chain.append({'Implementation': impl})
+        if act:
+            chain.append({'Action': act})
+        # If not, fallback to searching the database for the matching Problem/Solution
+        if not impl or not act:
+            for entry in PERSONAL_SOLUTIONS:
+                if entry.get('Problem') == match['Problem'] and entry.get('Solution') == match['Solution']:
+                    if not impl and entry.get('Implementation'):
+                        chain.append({'Implementation': entry.get('Implementation')})
+                    if not act and entry.get('action'):
+                        chain.append({'Action': entry.get('action')})
+                    break
+    return jsonify({'chain': chain})
 
 if __name__ == '__main__':
     app.run(debug=True) 

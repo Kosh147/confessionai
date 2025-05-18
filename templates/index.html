@@ -190,16 +190,51 @@
             margin-left: 1em;
             margin-top: 0.5em;
             margin-bottom: 0.5em;
+            color: #222;
+            font-size: 1em;
+            max-width: 500px;
+            word-break: break-word;
+            background: #e3e8f0;
+        }
+        .resource-action-0 { background: #e3e8f0; }
+        .resource-action-1 { background: #e3e8f0; }
+        .resource-action-2 { background: #e3e8f0; }
+        .resource-action-3 { background: #e3e8f0; }
+        .resource-action-4 { background: #e3e8f0; }
+        .personal-chain-rect {
+            border-radius: 1em;
+            padding: 1em 1.5em;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
             color: #fff;
             font-size: 1em;
             max-width: 500px;
             word-break: break-word;
+            background: #7c3aed;
         }
-        .resource-action-0 { background: #007bff; }
-        .resource-action-1 { background: #28a745; }
-        .resource-action-2 { background: #fd7e14; }
-        .resource-action-3 { background: #6f42c1; }
-        .resource-action-4 { background: #e83e8c; }
+        .personal-chain-rect.impl {
+            margin-left: 2em;
+        }
+        .personal-chain-rect.act {
+            margin-left: 4em;
+        }
+        .location-rect {
+            display: inline-block;
+            background: #f3f6fa;
+            color: #333;
+            border-radius: 1em;
+            padding: 0.7em 1.5em;
+            margin-bottom: 1em;
+            margin-left: 1em;
+            font-size: 1em;
+            cursor: pointer;
+            border: 2px solid #adb5bd;
+            transition: background 0.2s, border 0.2s;
+        }
+        .location-rect:hover {
+            background: #e9ecef;
+            border: 2px solid #7c3aed;
+        }
         /* Implementation indent 
         #implementationSection {
             margin-left: 100px;
@@ -540,33 +575,70 @@
         function renderImplementationActions(actions) {
             lastActions = actions;
             lastResources = Array(actions.length).fill(null);
-            implementationActions.innerHTML = actions.map((action, idx) =>
+            implementationActions.innerHTML = '';
+            if (lastUserInput && !document.getElementById('location-rect')) {
+                implementationActions.innerHTML += `<div id="location-rect" class="location-rect" onclick="repeatResourceSearch()">${lastUserInput}</div>`;
+            }
+            implementationActions.innerHTML += actions.map((action, idx) =>
                 `<div class="d-flex flex-column align-items-start mb-2">
                     <button class="btn btn-outline-primary implementation-action-btn" onclick="getResourceForAction(${idx})">${action}</button>
                     <span id="resource-link-${idx}" class="w-100"></span>
+                    <div id="personal-chain-${idx}"></div>
                 </div>`
             ).join('');
+        }
+
+        window.repeatResourceSearch = function() {
+            if (lastActions.length > 0) {
+                fetchResourcesSequentially(0);
+            }
         }
 
         window.getResourceForAction = async function(idx) {
             const action = lastActions[idx];
             const user_input = lastUserInput;
+            const solution = selectedSolutionOption.textContent;
             const linkSpan = document.getElementById(`resource-link-${idx}`);
+            const personalChainDiv = document.getElementById(`personal-chain-${idx}`);
             linkSpan.innerHTML = '<span class="text-secondary">Searching...</span>';
+            personalChainDiv.innerHTML = '';
             try {
                 const response = await fetch('/get_resource', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, user_input })
+                    body: JSON.stringify({ action, user_input, solution })
                 });
                 const data = await response.json();
                 if (data.url && data.title) {
                     linkSpan.innerHTML = `<div class="resource-rect resource-action-${idx % 5}">
-                        <a href="${data.url}" target="_blank" rel="noopener" style="color:#fff;font-weight:bold;text-decoration:underline;">${data.title}</a>
-                        <div style="font-size:0.95em; margin-top:0.5em; color:rgba(255,255,255,0.9);">${data.snippet || ''}</div>
+                        <a href="${data.url}" target="_blank" rel="noopener" style="color:#222;font-weight:bold;text-decoration:underline;">${data.title}</a>
+                        <div style="font-size:0.95em; margin-top:0.5em; color:#444;">${data.snippet || ''}</div>
                     </div>`;
                 } else {
                     linkSpan.innerHTML = '<span class="text-muted">No resource found</span>';
+                }
+                // Now fetch personal chain
+                const problem = selectedProblemTitle.textContent;
+                const chainResp = await fetch('/get_personal_chain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ problem, solution, action })
+                });
+                const chainData = await chainResp.json();
+                if (Array.isArray(chainData.chain) && chainData.chain.length > 0) {
+                    // Sort so Implementation comes before Action
+                    const sortedChain = [];
+                    chainData.chain.forEach(ev => { if (ev.Implementation) sortedChain.push(ev); });
+                    chainData.chain.forEach(ev => { if (ev.Action) sortedChain.push(ev); });
+                    personalChainDiv.innerHTML = sortedChain.map(ev => {
+                        if (ev.Implementation) {
+                            return `<div class="personal-chain-rect impl"><b>Implementation:</b> ${ev.Implementation}</div>`;
+                        } else if (ev.Action) {
+                            return `<div class="personal-chain-rect act"><b>Action:</b> ${ev.Action}</div>`;
+                        } else {
+                            return '';
+                        }
+                    }).join('');
                 }
             } catch (e) {
                 linkSpan.innerHTML = '<span class="text-danger">Error</span>';

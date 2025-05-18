@@ -7,6 +7,7 @@ from mistralai.models.chat_completion import ChatMessage
 from dotenv import load_dotenv
 import json
 import requests
+import time
 
 # Load environment variables
 load_dotenv()
@@ -81,6 +82,58 @@ def generate_implementation_actions(solution_option):
         return {
             "actions": ["Start now"]
         }
+
+def find_resource(action, user_input):
+    """Use LLM to find a relevant resource (link + label) for the action and user input (location/comments)."""
+    messages = [
+        ChatMessage(
+            role="system",
+            content=(
+                "You are a helpful assistant that finds the most relevant online resource for a given action and user location/comments. "
+                "Return a JSON object with 'label' (short description) and 'url' (link). "
+                "If no direct resource is available, suggest a local social event or community resource (e.g., townhall, local Facebook group, etc.) with a relevant link. "
+                "If you can't find anything, return a link to a local government or community website. Do not include any explanation."
+            )
+        ),
+        ChatMessage(role="user", content=f"Action: {action}\nLocation or comments: {user_input}")
+    ]
+    response = mistral_client.chat(
+        model="mistral-tiny",
+        messages=messages,
+    )
+    try:
+        resource = json.loads(response.choices[0].message.content)
+        return resource
+    except Exception:
+        return {"label": "Local community website", "url": "https://www.gov.uk/find-local-council"}
+
+def brave_search(query):
+    api_key = os.getenv('BRAVE_API_KEY')
+    if not api_key:
+        return None
+    url = 'https://api.search.brave.com/res/v1/web/search'
+    headers = {
+        'Accept': 'application/json',
+        'X-Subscription-Token': api_key
+    }
+    params = {'q': query, 'count': 1}
+    print(query)
+    try:
+        resp = requests.get(url, headers=headers, params=params)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('web', {}).get('results'):
+                result = data['web']['results'][0]
+                return {
+                    'title': result.get('title', ''),
+                    'url': result.get('url', ''),
+                    'snippet': result.get('description', '')
+                }
+        return None
+    except Exception:
+        return None
+    finally:
+        time.sleep(2)
 
 @app.route('/')
 def index():
@@ -181,6 +234,18 @@ def elevenlabs_stt():
             os.remove(temp_path)
         if os.path.exists(wav_path):
             os.remove(wav_path)
+
+@app.route('/get_resource', methods=['POST'])
+def get_resource():
+    data = request.json
+    action = data.get('action', '')
+    user_input = data.get('user_input', '')
+    query = f"{action} {user_input}".strip()
+    result = brave_search(query)
+    if result:
+        return jsonify(result)
+    else:
+        return jsonify({'title': 'No relevant resource found', 'url': '', 'snippet': ''})
 
 if __name__ == '__main__':
     app.run(debug=True) 

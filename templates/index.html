@@ -181,11 +181,30 @@
             text-align: left;
             font-size: 1em;
         }
-        /* Implementation indent */
+        .solutionIndent {
+            margin-left: 100px;
+        }
+        .resource-rect {
+            border-radius: 1em;
+            padding: 1em 1.5em;
+            margin-left: 1em;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+            color: #fff;
+            font-size: 1em;
+            max-width: 500px;
+            word-break: break-word;
+        }
+        .resource-action-0 { background: #007bff; }
+        .resource-action-1 { background: #28a745; }
+        .resource-action-2 { background: #fd7e14; }
+        .resource-action-3 { background: #6f42c1; }
+        .resource-action-4 { background: #e83e8c; }
+        /* Implementation indent 
         #implementationSection {
             margin-left: 100px;
             width: calc(100% - 100px);
-        }
+        }*/
     </style>
 </head>
 <body>
@@ -236,7 +255,7 @@
                     <span id="selectedCategory" class="problem-category"></span>
                     <h2 class="h5 mb-0" id="selectedProblemTitle"></h2>
                 </div>
-                <div class="card-body" id="solutionBody">
+                <div class="card-body solutionIndent" id="solutionBody">
                     <div id="solutionContent">
                         <p class="text-muted">Click on the logo or "Solve" to see a solution</p>
                     </div>
@@ -248,14 +267,15 @@
                     <img src="/static/welcome_page_character.jpg" class="implementation-logo" width="30" height="30" alt="Logo">
                     <span class="fw-bold">Let's get your problem sorted.</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body solutionIndent">
                     <div class="mb-3">
                         <span class="fw-semibold">Selected solution:</span>
                         <span id="selectedSolutionOption"></span>
                     </div>
                     <div class="mb-3 feedback-row">
-                        <input type="text" id="userFeedback" class="form-control" placeholder="Share your feedback or next step...">
-                        <button id="submitFeedbackBtn" class="feedback-circle-btn" title="Submit Feedback"><i class="bi bi-arrow-right"></i></button>
+                        <input type="text" id="userFeedback" class="form-control" placeholder="Share your location or comments...">
+                        <button id="submitFeedbackBtn" class="feedback-circle-btn" title="Submit"><i class="bi bi-arrow-right"></i></button>
+                        <button id="feedbackMicBtn" class="feedback-circle-btn" title="Voice input"><i class="bi bi-mic"></i></button>
                     </div>
                     <div class="feedback-list" id="feedbackList"></div>
                     <div class="implementation-actions" id="implementationActions"></div>
@@ -289,6 +309,7 @@
         const userFeedback = document.getElementById('userFeedback');
         const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
         const feedbackList = document.getElementById('feedbackList');
+        const feedbackMicBtn = document.getElementById('feedbackMicBtn');
         let lastProblems = [];
         let lastCategories = [];
         let currentOptions = [];
@@ -296,6 +317,12 @@
         let selectedCategoryValue = '';
         let feedbacks = [];
         let isRecording = false;
+        let feedbackVoiceRecorder;
+        let feedbackVoiceChunks = [];
+        let feedbackVoiceRecording = false;
+        let lastUserInput = '';
+        let lastActions = [];
+        let lastResources = [];
 
         // Map LLM categories to color classes
         function getCategoryClass(category) {
@@ -511,9 +538,48 @@
         }
 
         function renderImplementationActions(actions) {
-            implementationActions.innerHTML = actions.map(action =>
-                `<button class="btn btn-outline-primary implementation-action-btn">${action}</button>`
+            lastActions = actions;
+            lastResources = Array(actions.length).fill(null);
+            implementationActions.innerHTML = actions.map((action, idx) =>
+                `<div class="d-flex flex-column align-items-start mb-2">
+                    <button class="btn btn-outline-primary implementation-action-btn" onclick="getResourceForAction(${idx})">${action}</button>
+                    <span id="resource-link-${idx}" class="w-100"></span>
+                </div>`
             ).join('');
+        }
+
+        window.getResourceForAction = async function(idx) {
+            const action = lastActions[idx];
+            const user_input = lastUserInput;
+            const linkSpan = document.getElementById(`resource-link-${idx}`);
+            linkSpan.innerHTML = '<span class="text-secondary">Searching...</span>';
+            try {
+                const response = await fetch('/get_resource', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, user_input })
+                });
+                const data = await response.json();
+                if (data.url && data.title) {
+                    linkSpan.innerHTML = `<div class="resource-rect resource-action-${idx % 5}">
+                        <a href="${data.url}" target="_blank" rel="noopener" style="color:#fff;font-weight:bold;text-decoration:underline;">${data.title}</a>
+                        <div style="font-size:0.95em; margin-top:0.5em; color:rgba(255,255,255,0.9);">${data.snippet || ''}</div>
+                    </div>`;
+                } else {
+                    linkSpan.innerHTML = '<span class="text-muted">No resource found</span>';
+                }
+            } catch (e) {
+                linkSpan.innerHTML = '<span class="text-danger">Error</span>';
+            }
+            return Promise.resolve();
+        }
+
+        // Sequential resource fetching for Brave API rate limit
+        function fetchResourcesSequentially(idx) {
+            if (idx >= lastActions.length) return;
+            getResourceForAction(idx).then(() => {
+                setTimeout(() => fetchResourcesSequentially(idx + 1), 1100);
+            });
         }
 
         // Feedback logic
@@ -529,11 +595,62 @@
             if (!val) return;
             feedbacks.push(val);
             userFeedback.value = '';
+            lastUserInput = val;
             renderFeedbacks();
+            // After feedback, show resource links for all actions sequentially
+            if (lastActions.length > 0) {
+                fetchResourcesSequentially(0);
+            }
         }
         function renderFeedbacks() {
             feedbackList.innerHTML = feedbacks.map(f => `<div class="feedback-item">${f}</div>`).join('');
         }
+
+        // Feedback mic logic (ElevenLabs)
+        feedbackMicBtn.addEventListener('click', async () => {
+            if (feedbackVoiceRecording) {
+                feedbackVoiceRecorder.stop();
+                feedbackVoiceRecording = false;
+                feedbackMicBtn.innerHTML = '<i class="bi bi-mic"></i>';
+            } else {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    feedbackVoiceRecorder = new MediaRecorder(stream);
+                    feedbackVoiceChunks = [];
+                    feedbackVoiceRecording = true;
+                    feedbackVoiceRecorder.ondataavailable = (event) => {
+                        feedbackVoiceChunks.push(event.data);
+                    };
+                    feedbackVoiceRecorder.onstop = async () => {
+                        const audioBlob = new Blob(feedbackVoiceChunks, { type: 'audio/webm' });
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'recording.webm');
+                        try {
+                            setLoading(true);
+                            const response = await fetch('/elevenlabs_stt', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            const data = await response.json();
+                            if (response.ok) {
+                                userFeedback.value = data.text;
+                                userFeedback.focus();
+                            } else {
+                                alert(data.error || 'Error processing audio');
+                            }
+                        } catch (error) {
+                            alert('Error processing audio');
+                        } finally {
+                            setLoading(false);
+                        }
+                    };
+                    feedbackVoiceRecorder.start();
+                    feedbackMicBtn.innerHTML = '<i class="bi bi-stop-circle"></i>';
+                } catch (err) {
+                    alert('Error accessing microphone');
+                }
+            }
+        });
     </script>
 </body>
 </html> 
